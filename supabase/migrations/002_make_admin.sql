@@ -1,0 +1,3 @@
+-- 첫 번째 관리자 계정 설정
+-- 이메일을 본인 계정으로 교체한 뒤 실행하세요.
+-- UPDATE profiles SET role = 'admin', is_approved = true WHERE email = 'your@email.com';
