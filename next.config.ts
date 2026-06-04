@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   images: {
     remotePatterns: [
       {
@@ -25,6 +26,7 @@ const nextConfig: NextConfig = {
         "localhost:3001",
         "*.app.github.dev",
         "*.preview.app.github.dev",
+        "*.up.railway.app",
         ...(process.env.NEXT_PUBLIC_APP_URL
           ? [new URL(process.env.NEXT_PUBLIC_APP_URL).host]
           : []),

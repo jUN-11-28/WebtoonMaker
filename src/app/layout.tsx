@@ -45,7 +45,7 @@ export default function RootLayout({
       className={`${pretendard.variable} ${geistMono.variable}`}
     >
       <head />
-      <body className="min-h-screen bg-background font-sans antialiased">
+      <body suppressHydrationWarning className="min-h-screen bg-background font-sans antialiased">
         <Script id="theme-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeScript }} />
         <ThemeProvider defaultTheme="system">
           <div className="relative flex min-h-screen flex-col">

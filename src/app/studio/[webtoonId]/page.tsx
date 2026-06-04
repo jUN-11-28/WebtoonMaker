@@ -49,7 +49,7 @@ export default async function ProjectDashboard({
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <Link href="/studio" className="hover:underline">스튜디오</Link>
+            <Link href="/my" className="hover:underline">마이페이지</Link>
             <span>/</span>
             <span>{project.title}</span>
           </div>

@@ -304,6 +304,7 @@ export interface Database {
           error: string | null;
           provider: ImageProvider;
           created_at: string;
+          metadata: Json | null;
         };
         Insert: {
           id?: string;
@@ -314,11 +315,13 @@ export interface Database {
           error?: string | null;
           provider: ImageProvider;
           created_at?: string;
+          metadata?: Json | null;
         };
         Update: {
           status?: JobStatus;
           progress?: number;
           error?: string | null;
+          metadata?: Json | null;
         };
         Relationships: [];
       };

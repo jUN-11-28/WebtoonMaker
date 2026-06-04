@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Coins, PlusCircle, ShieldCheck, Clock } from "lucide-react";
+import { BookOpen, Coins, PlusCircle, ShieldCheck, Clock, Layers, Users } from "lucide-react";
 
 export default async function MyPage() {
   const supabase = await createClient();
@@ -27,16 +27,18 @@ export default async function MyPage() {
 
   const { data: webtoons } = await supabase
     .from("webtoons")
-    .select("id, title, cover_image_url, visibility, created_at")
+    .select("id, title, cover_image_url, visibility, created_at, episodes(count), characters(count)")
     .eq("author_id", user.id)
     .order("created_at", { ascending: false });
 
-  const wList = (webtoons ?? []) as {
+  const wList = (webtoons ?? []) as unknown as {
     id: string;
     title: string;
     cover_image_url: string | null;
     visibility: string;
     created_at: string;
+    episodes: { count: number }[];
+    characters: { count: number }[];
   }[];
 
   return (
@@ -83,7 +85,7 @@ export default async function MyPage() {
           <h2 className="text-lg font-semibold">내 웹툰</h2>
           {p?.is_approved && (
             <Button size="sm" asChild>
-              <Link href="/create">
+              <Link href="/studio/new">
                 <PlusCircle className="h-4 w-4 mr-1" />
                 새 웹툰
               </Link>
@@ -97,47 +99,59 @@ export default async function MyPage() {
             <p className="font-medium">아직 만든 웹툰이 없습니다</p>
             {p?.is_approved ? (
               <Button size="sm" variant="outline" className="mt-4" asChild>
-                <Link href="/create">첫 웹툰 만들기</Link>
+                <Link href="/studio/new">첫 웹툰 만들기</Link>
               </Button>
             ) : (
               <p className="text-sm mt-1">관리자 승인 후 생성 가능합니다</p>
             )}
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {wList.map((w) => (
-              <Link
-                key={w.id}
-                href={`/my/webtoons/${w.id}`}
-                className="group rounded-xl border bg-card overflow-hidden hover:shadow-md transition-shadow"
-              >
-                <div className="aspect-[3/4] bg-muted relative overflow-hidden">
-                  {w.cover_image_url ? (
-                    <Image
-                      src={w.cover_image_url}
-                      alt={w.title}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center">
-                      <BookOpen className="h-8 w-8 text-muted-foreground opacity-30" />
+          <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {wList.map((w) => {
+              const epCount = w.episodes[0]?.count ?? 0;
+              const charCount = w.characters[0]?.count ?? 0;
+              return (
+                <Link
+                  key={w.id}
+                  href={`/studio/${w.id}`}
+                  className="group rounded-xl border bg-card overflow-hidden hover:shadow-md transition-all"
+                >
+                  <div className="aspect-[3/4] bg-muted relative overflow-hidden">
+                    {w.cover_image_url ? (
+                      <Image
+                        src={w.cover_image_url}
+                        alt={w.title}
+                        fill
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center">
+                        <BookOpen className="h-8 w-8 text-muted-foreground opacity-30" />
+                      </div>
+                    )}
+                    <div className="absolute top-2 right-2">
+                      <Badge variant={w.visibility === "public" ? "default" : "secondary"} className="text-xs">
+                        {w.visibility === "public" ? "공개" : "비공개"}
+                      </Badge>
                     </div>
-                  )}
-                  <div className="absolute top-2 right-2">
-                    <Badge variant={w.visibility === "public" ? "default" : "secondary"} className="text-xs">
-                      {w.visibility === "public" ? "공개" : "비공개"}
-                    </Badge>
                   </div>
-                </div>
-                <div className="p-3">
-                  <p className="font-medium text-sm truncate">{w.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {new Date(w.created_at).toLocaleDateString("ko-KR")}
-                  </p>
-                </div>
-              </Link>
-            ))}
+                  <div className="p-3">
+                    <p className="font-medium text-sm truncate mb-1.5">{w.title}</p>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Layers className="h-3 w-3" />{epCount}화
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Users className="h-3 w-3" />{charCount}명
+                      </span>
+                      <span className="ml-auto">
+                        {new Date(w.created_at).toLocaleDateString("ko-KR")}
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </section>

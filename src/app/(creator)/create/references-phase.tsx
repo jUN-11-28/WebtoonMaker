@@ -65,21 +65,51 @@ export function ReferencesPhase({
       const res = await fetch("/api/generate/references", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          webtoonId,
-          episodeId,
-          key: item.key,
-          type: item.type,
-          storyJson,
-        }),
+        body: JSON.stringify({ webtoonId, episodeId, key: item.key, type: item.type, storyJson }),
       });
       if (!res.ok) {
         const d = await res.json();
         throw new Error(d.error ?? "생성 실패");
       }
-      const { imageUrl } = await res.json();
-      setItemState(item.key, { imageUrl, generating: false });
-      toast.success(`${item.name} 레퍼런스 생성 완료`);
+      const { jobId } = await res.json();
+
+      // job 완료 대기
+      const INTERVAL = 2500;
+      const TIMEOUT = 3 * 60 * 1000;
+      const start = Date.now();
+      while (Date.now() - start < TIMEOUT) {
+        await new Promise((r) => setTimeout(r, INTERVAL));
+        const pollRes = await fetch(`/api/jobs/${jobId}`);
+        if (!pollRes.ok) throw new Error("Job 상태 조회 실패");
+        const job = await pollRes.json() as { status: string; error?: string; imageUrl?: string };
+        if (job.status === "done") {
+          let imageUrl = job.imageUrl ?? null;
+          // metadata 컬럼 미적용 환경 폴백: assets API로 직접 조회
+          if (!imageUrl) {
+            const assetsRes = await fetch(`/api/webtoon/${webtoonId}/assets`);
+            if (assetsRes.ok) {
+              const assets = await assetsRes.json() as {
+                characters: { char_key: string; reference_image_url: string | null }[];
+                locations: { loc_key: string; reference_image_url: string | null }[];
+                props: { prop_key: string; reference_image_url: string | null }[];
+              };
+              if (item.type === "character") {
+                imageUrl = assets.characters.find((c) => c.char_key === item.key)?.reference_image_url ?? null;
+              } else if (item.type === "location") {
+                imageUrl = assets.locations.find((l) => l.loc_key === item.key)?.reference_image_url ?? null;
+              } else {
+                imageUrl = assets.props.find((p) => p.prop_key === item.key)?.reference_image_url ?? null;
+              }
+            }
+          }
+          if (!imageUrl) throw new Error("이미지 URL이 없습니다.");
+          setItemState(item.key, { imageUrl, generating: false });
+          toast.success(`${item.name} 레퍼런스 생성 완료`);
+          return;
+        }
+        if (job.status === "failed") throw new Error(job.error ?? "생성 실패");
+      }
+      throw new Error("생성 시간 초과");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "생성 실패");
       setItemState(item.key, { generating: false });

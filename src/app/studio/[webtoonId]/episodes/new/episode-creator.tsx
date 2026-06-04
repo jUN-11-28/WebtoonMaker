@@ -87,14 +87,31 @@ export function EpisodeCreator({ webtoonId, episodeNumber, credits, characters, 
             script,
             webtoonId,
             episodeId: newEpId,
-            selectedCharKeys: [...selectedCharKeys], // 선택된 캐릭터만 컨텍스트로
+            selectedCharKeys: [...selectedCharKeys],
           }),
         });
         if (!genRes.ok) throw new Error((await genRes.json()).error ?? "JSON 생성 실패");
-        const { storyJson: json } = await genRes.json();
-        setStoryJson(json);
-        toast.success("스토리보드 생성 완료! 씬·컷을 검토하세요.");
-        setStep("review");
+        const { jobId } = await genRes.json();
+
+        // job 완료 대기 (2.5초 간격 폴링)
+        const INTERVAL = 2500;
+        const TIMEOUT = 5 * 60 * 1000;
+        const start = Date.now();
+        while (Date.now() - start < TIMEOUT) {
+          await new Promise((r) => setTimeout(r, INTERVAL));
+          const pollRes = await fetch(`/api/jobs/${jobId}`);
+          if (!pollRes.ok) throw new Error("Job 상태 조회 실패");
+          const job = await pollRes.json() as { status: string; error?: string; storyJson?: unknown };
+          if (job.status === "done") {
+            if (!job.storyJson) throw new Error("스토리보드 데이터가 없습니다.");
+            setStoryJson(job.storyJson as import("@/lib/ai/story-schema").StoryJson);
+            toast.success("스토리보드 생성 완료! 씬·컷을 검토하세요.");
+            setStep("review");
+            return;
+          }
+          if (job.status === "failed") throw new Error(job.error ?? "JSON 생성 실패");
+        }
+        throw new Error("생성 시간 초과. 나중에 다시 시도하세요.");
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "오류가 발생했습니다.");
       }

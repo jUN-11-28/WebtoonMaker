@@ -3,6 +3,7 @@ import { requireCreator } from "@/lib/auth-guard";
 import { checkGenerationLimit } from "@/lib/rate-limit";
 import { CREDIT_COST } from "@/lib/credits";
 import { createServiceClient } from "@/lib/supabase/server";
+import { processCuts } from "@/lib/ai/cuts-processor";
 import type { StoryJson, Cut } from "@/lib/ai/story-schema";
 import type { Json } from "@/lib/supabase/types";
 
@@ -95,22 +96,12 @@ export async function POST(req: NextRequest) {
     await svc.from("cuts").upsert(cutInserts, { onConflict: "episode_id,cut_id_key" });
   }
 
-  // Supabase Edge Function을 fire-and-forget으로 호출
-  // after()로 감싸 response 전송 후 실행 보장
   after(async () => {
-    const edgeUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/generate-cuts`;
     try {
-      await fetch(edgeUrl, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ jobId, episodeId, webtoonId, provider, userId: ctx.userId }),
-      });
-    } catch {
+      await processCuts({ jobId, episodeId, webtoonId, provider, userId: ctx.userId });
+    } catch (e) {
       await svc.from("generation_jobs")
-        .update({ status: "failed", error: "Edge Function 호출 실패" })
+        .update({ status: "failed", error: String(e) })
         .eq("id", jobId);
     }
   });

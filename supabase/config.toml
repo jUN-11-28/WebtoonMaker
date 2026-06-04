@@ -371,6 +371,16 @@ authorization_url_path = "/oauth/consent"
 # Allow dynamic client registration
 allow_dynamic_registration = false
 
+# Edge Functions — 자체 서비스 롤 키 검증을 사용하므로 게이트웨이 JWT 검증 비활성화
+[functions.generate-json]
+verify_jwt = false
+
+[functions.generate-references]
+verify_jwt = false
+
+[functions.generate-cuts]
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

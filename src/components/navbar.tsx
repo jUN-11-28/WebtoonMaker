@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { Sparkles, BookOpen, PlusCircle } from "lucide-react";
+import { Sparkles, BookOpen } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { NavUserMenu } from "@/components/nav-user-menu";
 
@@ -38,18 +38,14 @@ export async function Navbar() {
         </div>
 
         <nav className="hidden md:flex items-center gap-1 flex-1">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/explore">
-              <BookOpen className="h-4 w-4 mr-1" />
-              탐색
-            </Link>
-          </Button>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/studio">
-              <PlusCircle className="h-4 w-4 mr-1" />
-              스튜디오
-            </Link>
-          </Button>
+          {!user && (
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/explore">
+                <BookOpen className="h-4 w-4 mr-1" />
+                탐색
+              </Link>
+            </Button>
+          )}
         </nav>
 
         <div className="flex items-center gap-2 ml-auto">
