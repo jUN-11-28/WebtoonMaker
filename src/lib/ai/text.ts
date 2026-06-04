@@ -23,10 +23,12 @@ export interface TextGenerateOptions {
   prompt: string;
   temperature?: number;
   maxOutputTokens?: number;
+  provider?: "gemini" | "openai";
 }
 
 export async function generateText(opts: TextGenerateOptions): Promise<string> {
-  if (AI_CONFIG.textProvider === "openai") {
+  const provider = opts.provider ?? AI_CONFIG.textProvider;
+  if (provider === "openai") {
     return generateTextWithOpenAI(opts);
   }
   return generateTextWithGemini(opts);
@@ -72,7 +74,8 @@ async function generateTextWithOpenAI(opts: TextGenerateOptions): Promise<string
 
 /** JSON 응답 강제 — Gemini는 responseMimeType, OpenAI는 json_object 모드 사용 */
 export async function generateJSON<T = unknown>(opts: TextGenerateOptions): Promise<T> {
-  if (AI_CONFIG.textProvider === "openai") {
+  const provider = opts.provider ?? AI_CONFIG.textProvider;
+  if (provider === "openai") {
     const openai = getOpenAI();
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = opts.system
       ? [{ role: "system", content: opts.system }, { role: "user", content: opts.prompt }]

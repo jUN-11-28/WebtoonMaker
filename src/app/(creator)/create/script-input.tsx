@@ -41,6 +41,7 @@ export function ScriptInput({ credits, onComplete }: ScriptInputProps) {
   const [pending, startTransition] = useTransition();
   const [script, setScript] = useState("");
   const [title, setTitle] = useState("");
+  const [textProvider, setTextProvider] = useState<"gemini" | "openai">("gemini");
   const [provider, setProvider] = useState<"gemini" | "openai">("openai");
   const [statusMsg, setStatusMsg] = useState("");
 
@@ -78,7 +79,7 @@ export function ScriptInput({ credits, onComplete }: ScriptInputProps) {
         const genRes = await fetch("/api/generate/json", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ script, webtoonId, episodeId }),
+          body: JSON.stringify({ script, webtoonId, episodeId, textProvider }),
         });
         if (!genRes.ok) {
           const d = await genRes.json();
@@ -126,17 +127,31 @@ export function ScriptInput({ credits, onComplete }: ScriptInputProps) {
         <p className="text-xs text-muted-foreground text-right">{scriptLen.toLocaleString()}자</p>
       </div>
 
-      <div className="space-y-2">
-        <Label>이미지 생성 엔진</Label>
-        <Select value={provider} onValueChange={(v) => setProvider(v as "gemini" | "openai")}>
-          <SelectTrigger className="w-56">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="openai">OpenAI gpt-image-2 (기본)</SelectItem>
-            <SelectItem value="gemini">Gemini (레퍼런스 다수 지원)</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>씬/컷 분석 엔진</Label>
+          <Select value={textProvider} onValueChange={(v) => setTextProvider(v as "gemini" | "openai")}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="gemini">Gemini (기본)</SelectItem>
+              <SelectItem value="openai">OpenAI GPT</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>이미지 생성 엔진</Label>
+          <Select value={provider} onValueChange={(v) => setProvider(v as "gemini" | "openai")}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="openai">OpenAI (기본)</SelectItem>
+              <SelectItem value="gemini">Gemini (레퍼런스 다수 지원)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* 비용 안내 */}

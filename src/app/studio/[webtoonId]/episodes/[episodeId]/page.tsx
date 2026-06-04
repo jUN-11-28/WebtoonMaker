@@ -1,10 +1,6 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { EpisodeEditor } from "./episode-editor";
-import { DeleteEpisodeButton } from "./delete-episode-button";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft } from "lucide-react";
 import type { Json } from "@/lib/supabase/types";
 import type { StoryJson } from "@/lib/ai/story-schema";
 
@@ -69,28 +65,9 @@ export default async function EpisodeEditPage({
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
-      <div className="flex items-center justify-between gap-3 mb-6">
-        <div className="flex items-center gap-3 min-w-0">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href={`/studio/${webtoonId}`}>
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              {(wt as { title: string }).title}
-            </Link>
-          </Button>
-          <span className="text-muted-foreground shrink-0">·</span>
-          <span className="text-sm font-medium truncate">
-            {episode.episode_number}화 — {episode.title}
-          </span>
-        </div>
-        <DeleteEpisodeButton
-          episodeId={episode.id}
-          webtoonId={webtoonId}
-          episodeTitle={episode.title}
-        />
-      </div>
-
       <EpisodeEditor
         webtoonId={webtoonId}
+        webtoonTitle={(wt as { title: string }).title}
         episode={episode}
         credits={credits}
         characters={charList}

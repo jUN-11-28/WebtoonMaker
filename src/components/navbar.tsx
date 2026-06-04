@@ -1,7 +1,8 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { Sparkles, BookOpen } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { NavUserMenu } from "@/components/nav-user-menu";
 
@@ -32,7 +33,7 @@ export async function Navbar() {
       <div className="container flex h-14 max-w-screen-xl mx-auto items-center px-4">
         <div className="flex items-center gap-2 mr-6">
           <Link href="/" className="flex items-center gap-2 font-semibold">
-            <Sparkles className="h-5 w-5 text-primary" />
+            <Image src="/logo.png" alt="웹툰메이커" width={24} height={24} className="rounded-sm" />
             <span className="text-base tracking-tight">웹툰메이커</span>
           </Link>
         </div>

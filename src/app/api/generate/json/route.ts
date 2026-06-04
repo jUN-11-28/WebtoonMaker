@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => null);
-  const { script, webtoonId, episodeId, selectedCharKeys } = body ?? {};
+  const { script, webtoonId, episodeId, selectedCharKeys, textProvider = "gemini" } = body ?? {};
 
   if (typeof script !== "string" || script.trim().length < 10) {
     return NextResponse.json({ error: "스크립트가 너무 짧습니다." }, { status: 400 });
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
 
   after(async () => {
     try {
-      await processJson({ jobId, episodeId, webtoonId, userId: ctx.userId, prompt });
+      await processJson({ jobId, episodeId, webtoonId, userId: ctx.userId, prompt, textProvider });
     } catch (e) {
       await svc.from("generation_jobs")
         .update({ status: "failed", error: String(e) })

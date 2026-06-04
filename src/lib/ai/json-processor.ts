@@ -12,10 +12,11 @@ export interface ProcessJsonOptions {
   webtoonId: string;
   userId: string;
   prompt: string;
+  textProvider?: "gemini" | "openai";
 }
 
 export async function processJson(opts: ProcessJsonOptions): Promise<void> {
-  const { jobId, episodeId, webtoonId, userId, prompt } = opts;
+  const { jobId, episodeId, webtoonId, userId, prompt, textProvider } = opts;
   const svc = createServiceClient();
 
   const { error: creditErr } = await svc.rpc("adjust_credits", {
@@ -30,6 +31,7 @@ export async function processJson(opts: ProcessJsonOptions): Promise<void> {
       system: STORY_JSON_SYSTEM_PROMPT,
       prompt,
       maxOutputTokens: 65536,
+      provider: textProvider,
     });
   } catch (e) {
     try { await svc.rpc("adjust_credits", { target_user_id: userId, delta: CREDIT_COST }); } catch { /* 환불 실패 무시 */ }

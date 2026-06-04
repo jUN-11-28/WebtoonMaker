@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition, useRef } from "react";
+import { useState, useEffect, useTransition, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +12,7 @@ import {
   Play, RefreshCw, CheckCircle, XCircle, Loader2,
   Square, Pencil, Plus, Trash2, AlertTriangle, X,
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { StoryJson, DialogueLine, NarrationLine, SfxLine } from "@/lib/ai/story-schema";
 import { CREDIT_COST } from "@/lib/credits";
 import Link from "next/link";
@@ -22,6 +23,7 @@ interface CutsPhaseProps {
   storyJson: StoryJson;
   webtoonId: string;
   episodeId: string;
+  onGeneratingChange?: (isGenerating: boolean, jobId: string | null) => void;
 }
 
 interface CutStatus {
@@ -42,7 +44,8 @@ const PANEL_ASPECT: Record<string, string> = {
   medium: "aspect-[3/4]",
 };
 
-export function CutsPhase({ storyJson, webtoonId, episodeId }: CutsPhaseProps) {
+export function CutsPhase({ storyJson, webtoonId, episodeId, onGeneratingChange }: CutsPhaseProps) {
+  const [imageProvider, setImageProvider] = useState<"openai" | "gemini">("openai");
   const [jobId, setJobId] = useState<string | null>(null);
   const [cutStatuses, setCutStatuses] = useState<CutStatus[]>(() =>
     storyJson.scenes.flatMap((s) =>
@@ -70,6 +73,11 @@ export function CutsPhase({ storyJson, webtoonId, episodeId }: CutsPhaseProps) {
   const [stuckWarning, setStuckWarning] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const lastProgressRef = useRef<{ value: number; time: number }>({ value: -1, time: Date.now() });
+
+  // 생성 상태 변화 시 부모에 알림
+  useEffect(() => {
+    onGeneratingChange?.(polling, jobId);
+  }, [polling, jobId, onGeneratingChange]);
 
   // 마운트 시 기존 상태 + 에셋 참조 로드
   useEffect(() => {
@@ -116,7 +124,10 @@ export function CutsPhase({ storyJson, webtoonId, episodeId }: CutsPhaseProps) {
   const failedCuts = cutStatuses.filter((c) => c.status === "failed").length;
   const progress = totalCuts > 0 ? Math.round((doneCuts / totalCuts) * 100) : 0;
   const totalCost = totalCuts * CREDIT_COST.generateCut;
-  const allDone = doneCuts + failedCuts === totalCuts && totalCuts > 0;
+  // allTerminated: 모든 컷이 done/failed 상태 (pending/generating 없음)
+  const allTerminated = doneCuts + failedCuts === totalCuts && totalCuts > 0;
+  // allDone: 실패 없이 전부 완료
+  const allDone = doneCuts === totalCuts && totalCuts > 0;
 
   function startGeneration() {
     startTransition(async () => {
@@ -124,7 +135,7 @@ export function CutsPhase({ storyJson, webtoonId, episodeId }: CutsPhaseProps) {
         const res = await fetch("/api/generate/cuts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ webtoonId, episodeId }),
+          body: JSON.stringify({ webtoonId, episodeId, provider: imageProvider }),
         });
         if (!res.ok) throw new Error((await res.json()).error ?? "생성 시작 실패");
         const { jobId: newJobId } = await res.json();
@@ -149,8 +160,8 @@ export function CutsPhase({ storyJson, webtoonId, episodeId }: CutsPhaseProps) {
         body: JSON.stringify({ action: "cancel" }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      // 폴링은 유지 — cancelled 상태를 서버에서 직접 감지해 종료
       toast.info("중지 요청 완료. 현재 컷 완료 후 멈춥니다.");
+      pollOnce(jobId);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "중지 실패");
     } finally {
@@ -192,58 +203,70 @@ export function CutsPhase({ storyJson, webtoonId, episodeId }: CutsPhaseProps) {
     }
   }
 
-  // 폴링
-  useEffect(() => {
-    if (!polling || !jobId) return;
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/jobs/${jobId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.cutStatuses && data.cutStatuses.length > 0) {
-          const updated: CutStatus[] = data.cutStatuses;
-          // prev 상태를 기준으로 머지 — 빈 배열이 와도 컷이 사라지지 않고,
-          // panelType/characterKeys/locationKey 같이 DB에 없는 필드도 보존됨
-          setCutStatuses((prev) => {
-            const map = new Map(updated.map((u) => [u.cutId, u]));
-            return prev.map((c) => {
-              const u = map.get(c.cutId);
-              return u ? { ...c, ...u } : c;
-            });
+  // 단일 폴링 실행 — 인터벌 외 즉시 호출에도 재사용
+  const pollOnce = useCallback(async (currentJobId: string) => {
+    try {
+      const res = await fetch(`/api/jobs/${currentJobId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.cutStatuses && data.cutStatuses.length > 0) {
+        const updated: CutStatus[] = data.cutStatuses;
+        setCutStatuses((prev) => {
+          const map = new Map(updated.map((u) => [u.cutId, u]));
+          return prev.map((c) => {
+            const u = map.get(c.cutId);
+            return u ? { ...c, ...u } : c;
           });
+        });
 
-          // 컷 상태 기준으로 완료 판단 — job status가 stuck돼도 여기서 폴링 종료
-          const allTerminal =
-            updated.length > 0 &&
-            updated.every((c) => c.status === "done" || c.status === "failed");
-          if (allTerminal) {
-            setPolling(false);
-            setStuckWarning(false);
+        const allTerminal =
+          updated.length > 0 &&
+          updated.every((c) => c.status === "done" || c.status === "failed");
+        if (allTerminal) {
+          setPolling(false);
+          setStuckWarning(false);
+          if (data.status === "cancelled") {
+            toast.success("생성이 중지되었습니다.");
+          } else {
             const failCount = updated.filter((c) => c.status === "failed").length;
             if (failCount === 0) toast.success("모든 컷이 생성되었습니다!");
             else toast.error(`${failCount}개 컷 생성이 실패했습니다.`);
-            return;
           }
+          return;
         }
+      }
 
-        // 무한로딩 감지: 5분 이상 진행률 변화 없으면 경고
-        const currentProgress = data.progress ?? 0;
-        if (currentProgress !== lastProgressRef.current.value) {
-          lastProgressRef.current = { value: currentProgress, time: Date.now() };
-          setStuckWarning(false);
-        } else if (Date.now() - lastProgressRef.current.time > 5 * 60 * 1000) {
-          setStuckWarning(true);
-        }
+      const currentProgress = data.progress ?? 0;
+      if (currentProgress !== lastProgressRef.current.value) {
+        lastProgressRef.current = { value: currentProgress, time: Date.now() };
+        setStuckWarning(false);
+      } else if (Date.now() - lastProgressRef.current.time > 5 * 60 * 1000) {
+        setStuckWarning(true);
+      }
 
-        if (data.status === "done" || data.status === "failed" || data.status === "cancelled") {
+      if (data.status === "done" || data.status === "failed") {
+        setPolling(false);
+        setStuckWarning(false);
+      } else if (data.status === "cancelled") {
+        const stillGenerating = (data.cutStatuses ?? []).some(
+          (c: CutStatus) => c.status === "generating"
+        );
+        if (!stillGenerating) {
           setPolling(false);
           setStuckWarning(false);
-          if (data.status === "cancelled") toast.success("생성이 중지되었습니다.");
+          toast.success("생성이 중지되었습니다.");
         }
-      } catch {}
-    }, 5000);
+      }
+    } catch {}
+  }, []); // 모든 의존성(setState, ref, toast)이 안정적이므로 deps 불필요
+
+  // 폴링 — polling/jobId 변경 시 즉시 1회 실행 후 5초 인터벌
+  useEffect(() => {
+    if (!polling || !jobId) return;
+    pollOnce(jobId);
+    const interval = setInterval(() => pollOnce(jobId), 5000);
     return () => clearInterval(interval);
-  }, [polling, jobId]);
+  }, [polling, jobId, pollOnce]);
 
   async function quickRegenerate(cutId: string) {
     setRegeneratingCuts((prev) => new Set(prev).add(cutId));
@@ -304,20 +327,38 @@ export function CutsPhase({ storyJson, webtoonId, episodeId }: CutsPhaseProps) {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-lg border bg-muted/40 p-4 text-sm">
-        <p className="font-medium mb-1">컷 이미지 생성</p>
-        <p className="text-muted-foreground text-xs">
-          레퍼런스 이미지를 첨부해 각 컷을 씬 단위로 병렬 생성합니다.
-          총 <strong className="text-foreground">{totalCuts}컷</strong> · 예상{" "}
-          <strong className="text-foreground">{totalCost} 크레딧</strong>
-        </p>
+      <div className="rounded-lg border bg-muted/40 p-4 text-sm space-y-3">
+        <div>
+          <p className="font-medium mb-1">컷 이미지 생성</p>
+          <p className="text-muted-foreground text-xs">
+            레퍼런스 이미지를 첨부해 각 컷을 씬 단위로 병렬 생성합니다.
+            총 <strong className="text-foreground">{totalCuts}컷</strong> · 예상{" "}
+            <strong className="text-foreground">{totalCost} 크레딧</strong>
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground shrink-0">이미지 엔진</span>
+          <Select
+            value={imageProvider}
+            onValueChange={(v) => setImageProvider(v as "openai" | "gemini")}
+            disabled={polling}
+          >
+            <SelectTrigger className="h-7 w-52 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="openai">OpenAI (기본)</SelectItem>
+              <SelectItem value="gemini">Gemini (레퍼런스 다수 지원)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* 진행률 */}
-      {(polling || allDone) && (
+      {(polling || allTerminated) && (
         <div className="space-y-1.5">
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{polling ? "생성 중..." : "완료"}</span>
+            <span>{polling ? "생성 중..." : failedCuts > 0 ? "일부 실패" : "완료"}</span>
             <span>{doneCuts}/{totalCuts} ({progress}%){failedCuts > 0 ? ` · ${failedCuts}개 실패` : ""}</span>
           </div>
           <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -357,7 +398,7 @@ export function CutsPhase({ storyJson, webtoonId, episodeId }: CutsPhaseProps) {
             {cancelling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
             생성 중지
           </Button>
-        ) : !pending && !allDone ? (
+        ) : !pending && (!allDone || failedCuts > 0) ? (
           <Button onClick={startGeneration} size="sm" className="gap-1.5">
             <Play className="h-3.5 w-3.5" />
             {doneCuts > 0 ? `이어서 생성 (${totalCuts - doneCuts}컷 남음)` : `생성 시작 (${totalCost} 크레딧)`}
@@ -368,7 +409,7 @@ export function CutsPhase({ storyJson, webtoonId, episodeId }: CutsPhaseProps) {
             <RefreshCw className="h-4 w-4 animate-spin" />작업을 시작하고 있어요...
           </div>
         )}
-        {allDone && doneCuts > 0 && (
+        {allDone && failedCuts === 0 && (
           <Button asChild size="sm">
             <Link href={`/my/webtoons/${webtoonId}`}>발행 설정으로 →</Link>
           </Button>
@@ -434,7 +475,7 @@ export function CutsPhase({ storyJson, webtoonId, episodeId }: CutsPhaseProps) {
 
                   return (
                     <div key={cut.cutId} className="rounded-lg border overflow-hidden group">
-                      <div className={cn(PANEL_ASPECT[cut.panelType ?? "medium"] ?? "aspect-[3/4]", "bg-muted relative overflow-hidden", isActive && "animate-pulse")}>
+                      <div className={cn("aspect-3/4", "bg-muted relative overflow-hidden", isActive && "animate-pulse")}>
                         {cut.imageUrl ? (
                           <>
                             <ImageLightbox
@@ -450,8 +491,8 @@ export function CutsPhase({ storyJson, webtoonId, episodeId }: CutsPhaseProps) {
                             </button>
                           </>
                         ) : isActive ? (
-                          <div className="h-full w-full bg-gradient-to-br from-muted via-muted-foreground/10 to-muted relative">
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 dark:via-white/10 to-transparent animate-[shimmer_1.4s_infinite] -translate-x-full" />
+                          <div className="h-full w-full bg-linear-to-br from-muted via-muted-foreground/10 to-muted relative">
+                            <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/20 dark:via-white/10 to-transparent animate-shimmer -translate-x-full" />
                             <div className="absolute inset-0 flex items-center justify-center">
                               <RefreshCw className="h-5 w-5 text-muted-foreground/50 animate-spin" />
                             </div>
@@ -472,7 +513,7 @@ export function CutsPhase({ storyJson, webtoonId, episodeId }: CutsPhaseProps) {
                           </div>
                         ) : (
                           <div className="h-full w-full bg-muted relative overflow-hidden">
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-[shimmer_2s_infinite_0.5s] -translate-x-full opacity-50" />
+                            <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/10 to-transparent animate-[shimmer_2s_infinite_0.5s] -translate-x-full opacity-50" />
                           </div>
                         )}
                       </div>
@@ -564,7 +605,7 @@ export function CutsPhase({ storyJson, webtoonId, episodeId }: CutsPhaseProps) {
       {/* 전체화면 이미지 오버레이 (Dialog 위) */}
       {fullscreenUrl && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95"
+          className="fixed inset-0 z-200 flex items-center justify-center bg-black/95"
           onClick={() => setFullscreenUrl(null)}
         >
           <button
@@ -890,7 +931,7 @@ function CutEditDialog({
           {/* 오른쪽: 현재 이미지 */}
           <div className="space-y-1.5">
             <Label className="text-xs">현재 이미지</Label>
-            <div className={cn(PANEL_ASPECT[cut.panel_type ?? "medium"] ?? "aspect-[3/4]", "rounded-lg border bg-muted overflow-hidden relative group")}>
+            <div className={cn(PANEL_ASPECT[cut.panel_type ?? "medium"] ?? "aspect-3/4", "rounded-lg border bg-muted overflow-hidden relative group")}>
               {currentStatus?.imageUrl ? (
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}

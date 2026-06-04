@@ -124,7 +124,9 @@ Create a separate cut for EACH:
 - Important props or environmental details the reader must notice
 - Action sequences: before / moment of impact / aftermath / reaction
 
-Minimum 4 cuts per scene. Dialogue-heavy or emotional scenes commonly have 20+ cuts.
+Target **4–8 cuts per scene**. Action or emotionally dense scenes may go up to 12 cuts. Rarely exceed 12 cuts per scene.
+Do NOT split trivial or redundant moments into separate cuts. Merge minor actions into one cut when the visual prompt can handle them together.
+Prioritize quality and clarity over quantity — fewer, well-composed cuts are better than many shallow ones.
 
 ## visual_prompt Writing Standard
 

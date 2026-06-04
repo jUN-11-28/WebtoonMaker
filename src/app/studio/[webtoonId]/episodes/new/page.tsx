@@ -1,9 +1,6 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { EpisodeCreator } from "./episode-creator";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft } from "lucide-react";
 
 export default async function NewEpisodePage({
   params,
@@ -58,19 +55,9 @@ export default async function NewEpisodePage({
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
-      <div className="flex items-center gap-3 mb-6">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href={`/studio/${webtoonId}`}>
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            {(wt as { title: string }).title}
-          </Link>
-        </Button>
-        <span className="text-muted-foreground">·</span>
-        <span className="text-sm font-medium">{nextEpNumber}화 추가</span>
-      </div>
-
       <EpisodeCreator
         webtoonId={webtoonId}
+        webtoonTitle={(wt as { title: string }).title}
         episodeNumber={nextEpNumber}
         credits={p.credits}
         characters={charList}

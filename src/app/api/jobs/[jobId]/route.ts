@@ -114,11 +114,12 @@ export async function PATCH(
 
   await svc.from("generation_jobs").update({ status: "cancelled" }).eq("id", jobId);
 
+  // pending 컷만 실패 처리 — generating 중인 컷은 프로세서가 완료 후 done으로 설정
   await svc
     .from("cuts")
     .update({ status: "failed" })
     .eq("episode_id", j.episode_id)
-    .eq("status", "generating");
+    .eq("status", "pending");
 
   return NextResponse.json({ ok: true });
 }

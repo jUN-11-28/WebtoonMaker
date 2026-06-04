@@ -62,7 +62,7 @@ export default async function WebtoonPage({
       <div className="flex gap-6 mb-8">
         <div className="shrink-0 w-28 sm:w-36 aspect-[3/4] rounded-lg bg-muted overflow-hidden relative">
           {w.cover_image_url ? (
-            <Image src={w.cover_image_url} alt={w.title} fill className="object-cover" />
+            <Image src={w.cover_image_url} alt={w.title} fill sizes="(max-width: 640px) 7rem, 9rem" className="object-cover" />
           ) : (
             <div className="flex h-full items-center justify-center">
               <BookOpen className="h-8 w-8 text-muted-foreground opacity-40" />

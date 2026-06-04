@@ -155,7 +155,7 @@ export function ReferencesPhase({
           <div key={item.key} className="rounded-lg border overflow-hidden">
             <div className="aspect-square bg-muted relative">
               {item.imageUrl ? (
-                <Image src={item.imageUrl} alt={item.name} fill className="object-cover" />
+                <Image src={item.imageUrl} alt={item.name} fill sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw" className="object-cover" />
               ) : (
                 <div className="flex h-full items-center justify-center">
                   <ImageIcon className="h-8 w-8 text-muted-foreground opacity-30" />
