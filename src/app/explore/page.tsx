@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import Image from "next/image";
 import { Heart, BookOpen } from "lucide-react";
@@ -23,10 +23,11 @@ export default async function ExplorePage() {
     author_id: string;
   }[];
 
-  // 작가 이름 일괄 조회
+  // 작가 이름 일괄 조회 — profiles RLS가 본인만 허용하므로 service client로 조회
+  const serviceClient = createServiceClient();
   const authorIds = [...new Set(list.map((w) => w.author_id))];
   const { data: profileRows } = authorIds.length > 0
-    ? await supabase
+    ? await serviceClient
         .from("profiles")
         .select("id, display_name")
         .in("id", authorIds)

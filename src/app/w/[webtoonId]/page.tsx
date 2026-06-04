@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -33,8 +33,9 @@ export default async function WebtoonPage({
     author_id: string;
   };
 
-  // 작가 이름
-  const { data: authorProfile } = await supabase
+  // 작가 이름 — profiles RLS가 본인만 허용하므로 service client로 조회
+  const serviceClient = createServiceClient();
+  const { data: authorProfile } = await serviceClient
     .from("profiles")
     .select("display_name")
     .eq("id", w.author_id)
