@@ -9,7 +9,7 @@
     }
   },
   "deploy": {
-    "startCommand": "PORT=${PORT:-8080} node .next/standalone/server.js",
+    "startCommand": "HOSTNAME=0.0.0.0 PORT=${PORT:-8080} node .next/standalone/server.js",
     "healthcheckPath": "/",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
