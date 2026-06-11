@@ -5,7 +5,7 @@
 export const CREDIT_COST = {
   generateJson: 1,       // Phase 1: story_json 생성
   generateReference: 1,  // Phase 2: 캐릭터/배경 레퍼런스 1장당
-  generateCut: 1,        // Phase 3: 컷 이미지 1장당
+  generateCut: 3,        // Phase 3: 컷 이미지 1장당
 } as const;
 
 /** 에피소드 전체 예상 비용 계산 */

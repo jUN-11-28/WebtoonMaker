@@ -164,7 +164,7 @@ export function ScriptInput({ credits, onComplete }: ScriptInputProps) {
           · JSON 생성: {CREDIT_COST.generateJson} 크레딧
         </p>
         <p className="text-muted-foreground">
-          · 레퍼런스/컷 이미지: 각 {CREDIT_COST.generateReference} 크레딧 (다음 단계에서 확인)
+          · 레퍼런스 이미지: 각 {CREDIT_COST.generateReference} 크레딧, 컷 이미지: 각 {CREDIT_COST.generateCut} 크레딧 (다음 단계에서 확인)
         </p>
         <p className="text-muted-foreground">
           보유 크레딧: <strong className="text-foreground">{credits}</strong>

@@ -6,9 +6,10 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { generateImage, panelTypeToSize, type ReferenceImage } from "./image";
 import { uploadBase64Image } from "./storage";
 import { buildCutPrompt } from "./prompt";
+import { CREDIT_COST } from "@/lib/credits";
 import type { StoryJson } from "./story-schema";
 
-const CREDIT_COST_PER_CUT = 10;
+const CREDIT_COST_PER_CUT = CREDIT_COST.generateCut;
 
 async function adjustCredits(userId: string, delta: number): Promise<void> {
   const svc = createServiceClient();
