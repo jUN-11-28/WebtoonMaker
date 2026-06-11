@@ -4,6 +4,7 @@
  */
 import sharp from "sharp";
 import { createServiceClient } from "@/lib/supabase/server";
+import { invalidateImageCache } from "./image";
 
 const BUCKET = "webtoon-images";
 
@@ -37,5 +38,7 @@ export async function uploadBase64Image(
   if (error) throw new Error(`Storage upload failed: ${error.message}`);
 
   const { data } = svc.storage.from(BUCKET).getPublicUrl(finalPath);
+  // upsert로 같은 URL의 내용이 바뀌었을 수 있으므로 다운로드 캐시 무효화
+  invalidateImageCache(data.publicUrl);
   return data.publicUrl;
 }

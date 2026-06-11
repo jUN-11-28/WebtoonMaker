@@ -29,10 +29,14 @@ export function CommentSection({ targetType, targetId, authorId, displayName }: 
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
-    fetch(`/api/comments?target_type=${targetType}&target_id=${targetId}`)
+    const controller = new AbortController();
+    fetch(`/api/comments?target_type=${targetType}&target_id=${targetId}`, {
+      signal: controller.signal,
+    })
       .then((r) => r.json())
       .then((d) => setComments(d.comments ?? []))
       .catch(() => {});
+    return () => controller.abort();
   }, [targetType, targetId]);
 
   async function handleDelete(commentId: string) {

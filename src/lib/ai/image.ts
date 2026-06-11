@@ -6,8 +6,6 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import OpenAI from "openai";
 import { AI_CONFIG, type ImageProvider } from "./config";
-import * as fs from "fs";
-import * as path from "path";
 
 let _gemini: GoogleGenAI | null = null;
 let _openai: OpenAI | null = null;
@@ -54,14 +52,41 @@ export interface ImageGenerateResult {
   mimeType: string;
 }
 
+// 레퍼런스 이미지 다운로드 캐시 — 배치 컷 생성 시 같은 캐릭터/배경 레퍼런스(수 MB)를
+// 컷마다 재다운로드하지 않도록 함. 상한 초과 시 가장 오래된 것부터 제거.
+const REF_CACHE_MAX = 30;
+const refCache = new Map<string, { data: string; mimeType: string }>();
+
+/** Storage upsert로 같은 URL의 내용이 바뀔 때 호출 — 스테일 캐시 방지 */
+export function invalidateImageCache(url: string) {
+  refCache.delete(url);
+}
+
 /** URL → base64 변환 (서버 사이드) */
 async function urlToBase64(url: string): Promise<{ data: string; mimeType: string }> {
+  const cached = refCache.get(url);
+  if (cached) {
+    // 최근 사용 항목을 뒤로 이동 (LRU)
+    refCache.delete(url);
+    refCache.set(url, cached);
+    return cached;
+  }
+
   const parsed = new URL(url);
   if (parsed.protocol !== "https:") throw new Error("https URL만 허용됩니다.");
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+  if (!res.ok) {
+    throw new Error(`레퍼런스 이미지 다운로드 실패 (${res.status}): ${url}`);
+  }
   const buffer = Buffer.from(await res.arrayBuffer());
   const mimeType = res.headers.get("content-type") ?? "image/png";
-  return { data: buffer.toString("base64"), mimeType };
+  const result = { data: buffer.toString("base64"), mimeType };
+
+  refCache.set(url, result);
+  if (refCache.size > REF_CACHE_MAX) {
+    refCache.delete(refCache.keys().next().value!);
+  }
+  return result;
 }
 
 export async function generateImage(

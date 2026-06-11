@@ -56,8 +56,11 @@ export async function deductCredits(userId: string, amount: number): Promise<voi
   if (error) throw new Error(`크레딧 차감 실패: ${error.message}`);
 }
 
-/** 크레딧 환불 (생성 실패 시). */
+/** 크레딧 환불 (생성 실패 시). 환불 실패는 throw하지 않되 추적 가능하도록 로깅. */
 export async function refundCredits(userId: string, amount: number): Promise<void> {
   const svc = createServiceClient();
-  await svc.rpc("adjust_credits", { target_user_id: userId, delta: amount });
+  const { error } = await svc.rpc("adjust_credits", { target_user_id: userId, delta: amount });
+  if (error) {
+    console.error(`크레딧 환불 실패 (user=${userId}, amount=${amount}):`, error.message);
+  }
 }

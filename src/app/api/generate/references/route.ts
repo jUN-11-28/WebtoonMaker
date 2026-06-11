@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { requireCreator, deductCredits, refundCredits } from "@/lib/auth-guard";
 import { checkGenerationLimit } from "@/lib/rate-limit";
 import { CREDIT_COST } from "@/lib/credits";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { generateImage } from "@/lib/ai/image";
 import { uploadBase64Image } from "@/lib/ai/storage";
 import { processReference } from "@/lib/ai/reference-processor";
@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const supabase = await (await import("@/lib/supabase/server")).createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

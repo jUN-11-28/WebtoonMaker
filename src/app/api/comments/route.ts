@@ -1,26 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getVoterHash, ensureAnonCookie, getClientIp } from "@/lib/voter";
+import { rateLimit } from "@/lib/rate-limit";
 import type { TargetType } from "@/lib/supabase/types";
 
 const VALID_TYPES: TargetType[] = ["webtoon", "episode", "cut"];
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1분
 const RATE_LIMIT_MAX = 5; // 비회원 분당 5개
 const BANNED_WORDS = ["스팸", "광고", "도박"]; // 최소 금칙어 예시
-
-// 간단한 인메모리 rate limit (단일 인스턴스용; 프로덕션에선 Redis 권장)
-const rateLimitMap = new Map<string, number[]>();
-
-function isRateLimited(key: string): boolean {
-  const now = Date.now();
-  const timestamps = (rateLimitMap.get(key) ?? []).filter(
-    (t) => now - t < RATE_LIMIT_WINDOW_MS
-  );
-  if (timestamps.length >= RATE_LIMIT_MAX) return true;
-  timestamps.push(now);
-  rateLimitMap.set(key, timestamps);
-  return false;
-}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -75,7 +62,8 @@ export async function POST(req: NextRequest) {
 
   // 비회원 rate limit (IP 기준)
   if (!user) {
-    if (isRateLimited(ip)) {
+    const { allowed } = rateLimit(`comment:${ip}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+    if (!allowed) {
       return NextResponse.json({ error: "잠시 후 다시 시도해 주세요." }, { status: 429 });
     }
   }

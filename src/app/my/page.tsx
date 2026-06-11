@@ -11,11 +11,19 @@ export default async function MyPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name, role, is_approved, credits, created_at")
-    .eq("id", user.id)
-    .single();
+  // 프로필 + 웹툰 목록 병렬 조회
+  const [{ data: profile }, { data: webtoons }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("display_name, role, is_approved, credits, created_at")
+      .eq("id", user.id)
+      .single(),
+    supabase
+      .from("webtoons")
+      .select("id, title, cover_image_url, visibility, created_at, episodes(count), characters(count)")
+      .eq("author_id", user.id)
+      .order("created_at", { ascending: false }),
+  ]);
 
   const p = profile as {
     display_name: string | null;
@@ -24,12 +32,6 @@ export default async function MyPage() {
     credits: number;
     created_at: string;
   } | null;
-
-  const { data: webtoons } = await supabase
-    .from("webtoons")
-    .select("id, title, cover_image_url, visibility, created_at, episodes(count), characters(count)")
-    .eq("author_id", user.id)
-    .order("created_at", { ascending: false });
 
   const wList = (webtoons ?? []) as unknown as {
     id: string;

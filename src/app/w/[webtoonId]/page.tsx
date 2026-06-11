@@ -14,11 +14,25 @@ export default async function WebtoonPage({
   const { webtoonId } = await params;
   const supabase = await createClient();
 
-  const { data: webtoon } = await supabase
-    .from("webtoons")
-    .select("id, title, description, cover_image_url, visibility, author_id")
-    .eq("id", webtoonId)
-    .single();
+  // 독립 쿼리 병렬 실행
+  const [{ data: webtoon }, { data: episodes }, { count: likeCount }] = await Promise.all([
+    supabase
+      .from("webtoons")
+      .select("id, title, description, cover_image_url, visibility, author_id")
+      .eq("id", webtoonId)
+      .single(),
+    supabase
+      .from("episodes")
+      .select("id, episode_number, title, status, created_at")
+      .eq("webtoon_id", webtoonId)
+      .eq("status", "ready")
+      .order("episode_number", { ascending: true }),
+    supabase
+      .from("likes")
+      .select("*", { count: "exact", head: true })
+      .eq("target_type", "webtoon")
+      .eq("target_id", webtoonId),
+  ]);
 
   if (!webtoon || (webtoon as { visibility: string }).visibility !== "public") {
     notFound();
@@ -43,19 +57,6 @@ export default async function WebtoonPage({
 
   const authorName = (authorProfile as { display_name: string | null } | null)
     ?.display_name ?? "알 수 없음";
-
-  const { data: episodes } = await supabase
-    .from("episodes")
-    .select("id, episode_number, title, status, created_at")
-    .eq("webtoon_id", webtoonId)
-    .eq("status", "ready")
-    .order("episode_number", { ascending: true });
-
-  const { count: likeCount } = await supabase
-    .from("likes")
-    .select("*", { count: "exact", head: true })
-    .eq("target_type", "webtoon")
-    .eq("target_id", webtoonId);
 
   return (
     <div className="mx-auto max-w-screen-md px-4 py-8">

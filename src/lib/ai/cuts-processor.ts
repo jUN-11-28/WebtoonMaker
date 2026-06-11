@@ -5,7 +5,8 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { generateImage, panelTypeToSize, type ReferenceImage } from "./image";
 import { uploadBase64Image } from "./storage";
-import type { Cut, Scene, StoryJson } from "./story-schema";
+import { buildCutPrompt } from "./prompt";
+import type { StoryJson } from "./story-schema";
 
 const CREDIT_COST_PER_CUT = 10;
 
@@ -13,92 +14,6 @@ async function adjustCredits(userId: string, delta: number): Promise<void> {
   const svc = createServiceClient();
   const { error } = await svc.rpc("adjust_credits", { target_user_id: userId, delta });
   if (error && delta < 0) throw new Error(`크레딧 차감 실패: ${error.message}`);
-}
-
-function buildCutPrompt(cut: Cut, scene: Scene, storyJson: StoryJson): string {
-  const hasText =
-    (cut.dialogue?.length ?? 0) + (cut.narration?.length ?? 0) + (cut.sfx?.length ?? 0) > 0;
-
-  const characterBible = (storyJson.character_bible ?? [])
-    .map((c) => `- ${c.name} (${c.char_key}): ${c.visual_core}. Wardrobe: ${c.wardrobe}. Expression: ${c.expression}.`)
-    .join("\n");
-
-  const dialogue = (cut.dialogue ?? [])
-    .map((d) => `- Speaker: ${d.character || "Narrator"}\n  Text: ${d.text}\n  Bubble position: ${d.bubble_position ?? "auto"}`)
-    .join("\n");
-
-  const narration = (cut.narration ?? []).map((n) => `- ${n.text}`).join("\n");
-  const sfx = (cut.sfx ?? []).map((s) => `- ${s.text}`).join("\n");
-
-  const textRules = hasText
-    ? `Text rendering mode:
-- Render speech bubbles directly inside the image.
-- Render all Korean dialogue exactly as provided.
-- Render narration as clean rectangular narration boxes.
-- Render SFX as Korean comic sound effect text.
-- Follow bubble_position as closely as possible.
-- Korean text must be readable, clean, and correctly spelled.
-- Use natural Korean webtoon typography.
-- Keep speech bubbles from covering important faces.
-- If there is too much text, use smaller but readable bubbles.
-- Do not invent new dialogue.
-- Do not translate Korean text into English.`
-    : `Clean artwork mode:
-- Do not draw speech bubbles.
-- Do not render Korean text inside the image.
-- Leave clean empty space for speech bubbles.`;
-
-  const panelType = cut.panel_type;
-  const sizeHint =
-    panelType === "wide"
-      ? "Landscape orientation (wider than tall). "
-      : panelType === "insert" || panelType === "close"
-      ? "Square composition. "
-      : "Vertical portrait orientation (taller than wide). ";
-
-  return `Create one Korean webtoon panel.
-
-Title: ${storyJson.project_title}
-Episode: ${storyJson.episode}
-Scene: ${scene.scene_id} - ${scene.description}
-Cut: ${cut.cut_id}
-Panel type: ${panelType} — ${sizeHint}
-
-Visual prompt (follow exactly):
-${cut.visual_prompt}
-
-Camera: ${cut.camera}
-Emotion: ${cut.emotion}
-
-Character bible:
-${characterBible || "- none"}
-
-Style:
-${storyJson.style_guide.art_style}
-Color palette: ${storyJson.style_guide.color_palette}
-Line weight: ${storyJson.style_guide.line_weight}
-Mood: ${storyJson.style_guide.mood}
-
-Panel rules:
-- Polished Korean webtoon style.
-- Clean line art, soft shading, cinematic composition.
-- Keep characters visually consistent across all panels.
-- Make this look like a finished Korean webtoon cut.
-- Preserve character outfits, props, location details, mood, and lighting.
-
-${textRules}
-
-Dialogue to render:
-${dialogue || "- none"}
-
-Narration to render:
-${narration || "- none"}
-
-SFX to render:
-${sfx || "- none"}
-
-Negative prompt:
-${storyJson.style_guide.global_negative_prompt}`.trim();
 }
 
 export interface ProcessCutsOptions {
@@ -148,7 +63,13 @@ export async function processCuts(opts: ProcessCutsOptions): Promise<void> {
     existingMap.set(c.cut_id_key, { status: c.status, image_url: c.image_url });
   }
 
-  let done = 0;
+  // 이미 완료된 컷은 미리 집계해 progress를 한 번만 기록 — 스킵 분기마다 DB 쓰기 방지
+  let done = allCuts.filter((c) => existingMap.get(c.cut_id)?.status === "done").length;
+  if (done > 0) {
+    await svc.from("generation_jobs")
+      .update({ progress: Math.round((done / allCuts.length) * 100) })
+      .eq("id", jobId);
+  }
 
   await Promise.allSettled(
     storyJson.scenes.map(async (scene) => {
@@ -158,10 +79,6 @@ export async function processCuts(opts: ProcessCutsOptions): Promise<void> {
         const existing = existingMap.get(cut.cut_id);
         if (existing?.status === "done") {
           prevImageUrl = existing.image_url;
-          done++;
-          await svc.from("generation_jobs")
-            .update({ progress: Math.round((done / allCuts.length) * 100) })
-            .eq("id", jobId);
           continue;
         }
 

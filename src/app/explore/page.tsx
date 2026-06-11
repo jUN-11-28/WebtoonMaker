@@ -23,31 +23,32 @@ export default async function ExplorePage() {
     author_id: string;
   }[];
 
-  // 작가 이름 일괄 조회 — profiles RLS가 본인만 허용하므로 service client로 조회
+  // 작가 이름(profiles RLS가 본인만 허용하므로 service client) + 좋아요 수 병렬 일괄 조회
   const serviceClient = createServiceClient();
   const authorIds = [...new Set(list.map((w) => w.author_id))];
-  const { data: profileRows } = authorIds.length > 0
-    ? await serviceClient
-        .from("profiles")
-        .select("id, display_name")
-        .in("id", authorIds)
-    : { data: [] };
+  const ids = list.map((w) => w.id);
+
+  const [{ data: profileRows }, { data: likeCounts }] = await Promise.all([
+    authorIds.length > 0
+      ? serviceClient
+          .from("profiles")
+          .select("id, display_name")
+          .in("id", authorIds)
+      : Promise.resolve({ data: [] }),
+    ids.length > 0
+      ? supabase
+          .from("likes")
+          .select("target_id")
+          .eq("target_type", "webtoon")
+          .in("target_id", ids)
+      : Promise.resolve({ data: [] }),
+  ]);
 
   const profileMap: Record<string, string | null> = {};
   for (const p of profileRows ?? []) {
     profileMap[(p as { id: string; display_name: string | null }).id] =
       (p as { id: string; display_name: string | null }).display_name;
   }
-
-  // 좋아요 수 일괄 조회
-  const ids = list.map((w) => w.id);
-  const { data: likeCounts } = ids.length > 0
-    ? await supabase
-        .from("likes")
-        .select("target_id")
-        .eq("target_type", "webtoon")
-        .in("target_id", ids)
-    : { data: [] };
 
   const likeMap: Record<string, number> = {};
   for (const row of (likeCounts ?? []) as { target_id: string }[]) {

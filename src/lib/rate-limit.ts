@@ -4,12 +4,23 @@
  */
 const store = new Map<string, { count: number; resetAt: number }>();
 
+// 만료 엔트리가 쌓여 무한 증가하지 않도록 임계 초과 시 일괄 정리
+const SWEEP_THRESHOLD = 1_000;
+
+function sweepExpired(now: number) {
+  if (store.size < SWEEP_THRESHOLD) return;
+  for (const [key, entry] of store) {
+    if (now > entry.resetAt) store.delete(key);
+  }
+}
+
 export function rateLimit(
   key: string,
   maxRequests: number,
   windowMs: number
 ): { allowed: boolean; remaining: number; resetAt: number } {
   const now = Date.now();
+  sweepExpired(now);
   let entry = store.get(key);
 
   if (!entry || now > entry.resetAt) {

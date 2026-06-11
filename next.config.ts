@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   images: {
+    // 대형 웹툰 컷 PNG를 AVIF/WebP로 변환 전송 — 다운로드 크기 대폭 감소
+    formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {
         // Supabase Storage (생성된 이미지)

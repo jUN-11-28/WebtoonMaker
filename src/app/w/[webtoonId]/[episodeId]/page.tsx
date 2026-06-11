@@ -15,19 +15,59 @@ export default async function EpisodePage({
   const { webtoonId, episodeId } = await params;
   const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
-  const displayName = user
-    ? await supabase.from("profiles").select("display_name").eq("id", user.id).single()
-        .then(({ data }) => (data as { display_name: string | null } | null)?.display_name ?? null)
-    : null;
+  // 독립 쿼리 병렬 실행 — 순차 대기 시 왕복 7회가 직렬화됨
+  const [
+    viewer,
+    { data: episode },
+    { data: webtoon },
+    { data: cutsRaw },
+    { data: siblingsRaw },
+    { count: likeCount },
+  ] = await Promise.all([
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return { user: null, displayName: null };
+      const { data } = await supabase
+        .from("profiles").select("display_name").eq("id", user.id).single();
+      return {
+        user,
+        displayName: (data as { display_name: string | null } | null)?.display_name ?? null,
+      };
+    }),
+    // 에피소드 조회
+    supabase
+      .from("episodes")
+      .select("id, episode_number, title, status, webtoon_id")
+      .eq("id", episodeId)
+      .eq("webtoon_id", webtoonId)
+      .single(),
+    // 웹툰 visibility 체크
+    supabase
+      .from("webtoons")
+      .select("title, visibility")
+      .eq("id", webtoonId)
+      .single(),
+    // 컷 조회 (순서대로, done 상태만)
+    supabase
+      .from("cuts")
+      .select("id, order_index, image_url, cut_id_key")
+      .eq("episode_id", episodeId)
+      .eq("status", "done")
+      .order("order_index", { ascending: true }),
+    // 이전/다음 에피소드
+    supabase
+      .from("episodes")
+      .select("id, episode_number")
+      .eq("webtoon_id", webtoonId)
+      .eq("status", "ready")
+      .order("episode_number", { ascending: true }),
+    supabase
+      .from("likes")
+      .select("*", { count: "exact", head: true })
+      .eq("target_type", "episode")
+      .eq("target_id", episodeId),
+  ]);
 
-  // 에피소드 조회
-  const { data: episode } = await supabase
-    .from("episodes")
-    .select("id, episode_number, title, status, webtoon_id")
-    .eq("id", episodeId)
-    .eq("webtoon_id", webtoonId)
-    .single();
+  const { user, displayName } = viewer;
 
   const ep = episode as {
     id: string;
@@ -39,23 +79,8 @@ export default async function EpisodePage({
 
   if (!ep || ep.status !== "ready") notFound();
 
-  // 웹툰 visibility 체크
-  const { data: webtoon } = await supabase
-    .from("webtoons")
-    .select("title, visibility")
-    .eq("id", webtoonId)
-    .single();
-
   const wt = webtoon as { title: string; visibility: string } | null;
   if (!wt || wt.visibility !== "public") notFound();
-
-  // 컷 조회 (순서대로, done 상태만)
-  const { data: cutsRaw } = await supabase
-    .from("cuts")
-    .select("id, order_index, image_url, cut_id_key")
-    .eq("episode_id", episodeId)
-    .eq("status", "done")
-    .order("order_index", { ascending: true });
 
   const cuts = (cutsRaw ?? []) as {
     id: string;
@@ -64,24 +89,10 @@ export default async function EpisodePage({
     cut_id_key: string;
   }[];
 
-  // 이전/다음 에피소드
-  const { data: siblingsRaw } = await supabase
-    .from("episodes")
-    .select("id, episode_number")
-    .eq("webtoon_id", webtoonId)
-    .eq("status", "ready")
-    .order("episode_number", { ascending: true });
-
   const siblings = (siblingsRaw ?? []) as { id: string; episode_number: number }[];
   const currentIdx = siblings.findIndex((s) => s.id === episodeId);
   const prev = currentIdx > 0 ? siblings[currentIdx - 1] : null;
   const next = currentIdx < siblings.length - 1 ? siblings[currentIdx + 1] : null;
-
-  const { count: likeCount } = await supabase
-    .from("likes")
-    .select("*", { count: "exact", head: true })
-    .eq("target_type", "episode")
-    .eq("target_id", episodeId);
 
   return (
     <div className="flex flex-col items-center">
@@ -105,7 +116,7 @@ export default async function EpisodePage({
             <p>이미지를 준비 중입니다.</p>
           </div>
         ) : (
-          cuts.map((cut) => (
+          cuts.map((cut, idx) => (
             <div key={cut.id} className="w-full">
               {cut.image_url ? (
                 <div className="relative w-full">
@@ -116,7 +127,7 @@ export default async function EpisodePage({
                     height={1200}
                     className="w-full h-auto"
                     sizes="(max-width: 672px) 100vw, 672px"
-                    priority={cut.order_index === 0}
+                    priority={idx === 0}
                   />
                 </div>
               ) : (
